@@ -15,7 +15,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth', {
+      const response = await fetch('http://localhost:3003/api/auth', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -24,9 +24,19 @@ export default function Login() {
       });
 
       const data = await response.json();
+      console.log('Auth response:', data);
 
       if (response.ok && data.token) {
         localStorage.setItem('token', data.token);
+        console.log('Stored token:', data.token);
+        
+        // Decode and log token payload
+        const payload = JSON.parse(atob(data.token.split('.')[1]));
+        console.log('Token payload:', payload);
+        
+        // Set token in cookie with HttpOnly flag
+        document.cookie = `auth_token=${data.token}; path=/; secure; samesite=strict`;
+        
         router.push('/profile');
       } else {
         setError(data.message || 'Authentication failed');
@@ -58,7 +68,6 @@ export default function Login() {
                 onChange={(e) => setUsername(e.target.value)}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                 placeholder="Username"
-                disabled={loading}
               />
             </div>
             <div>
@@ -72,7 +81,6 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                 placeholder="Password"
-                disabled={loading}
               />
             </div>
           </div>
@@ -100,6 +108,12 @@ export default function Login() {
                 loading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
               } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
             >
+              {loading ? (
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              ) : null}
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
           </div>
