@@ -1,8 +1,20 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { gql, useQuery, ApolloClient, InMemoryCache, ApolloProvider, createHttpLink } from '@apollo/client';
+import { gql, useQuery, ApolloClient, InMemoryCache } from '@apollo/client';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+
+function createApolloClient() {
+  return new ApolloClient({
+    uri: 'https://learn.reboot01.com/api/graphql-engine/v1/graphql',
+    cache: new InMemoryCache(),
+    headers: {
+      'Authorization': `Bearer ${typeof window !== 'undefined' ? window.localStorage.getItem('token') || '' : ''}`
+    }
+  });
+}
+
+const client = createApolloClient();
 
 const GET_USER_DATA = gql`
   query($userId: Int!, $eventId: Int!) {
@@ -92,19 +104,6 @@ const GET_USER_DATA = gql`
     }
   }
 `;
-
-function getUserId() {
-  if (typeof window === 'undefined') return null;
-  try {
-    const token = window.localStorage.getItem('token');
-    if (!token) return null;
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.userId || payload.sub || null;
-  } catch (error) {
-    console.error('Error extracting user ID:', error);
-    return null;
-  }
-}
 
 const formatBytes = (bytes) => {
   if (bytes === 0) return '0';
@@ -353,34 +352,123 @@ const SkillsPieChart = ({ skills }) => {
   );
 };
 
-function ProfileData({ client }) {
+export default function Profile() {
   const router = useRouter();
-  const userId = getUserId();
-
-  useEffect(() => {
-    if (!userId) {
-      router.push('/auth');
-    }
-  }, [userId, router]);
-
-  const { loading, error, data } = useQuery(GET_USER_DATA, {
-    variables: {
-      userId: userId || 0,
-      eventId: 20
-    },
-    skip: !userId
-  });
-
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
-  if (!data?.user?.[0]) return <div>No user data found</div>;
-
-  const user = data.user[0];
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [showAllProjects, setShowAllProjects] = useState(false);
   const [showAllAudits, setShowAllAudits] = useState(false);
   const [auditFilter, setAuditFilter] = useState('passed');
   
+  // Get userId from token
+  const getUserId = () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return null;
+      
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.userId || payload.sub || null;
+    } catch (error) {
+      console.error('Error extracting user ID:', error);
+      return null;
+    }
+  };
+
+  const userId = getUserId();
+  
+  const [apolloClient, setApolloClient] = useState(null);
+
+  useEffect(() => {
+    setApolloClient(createApolloClient());
+  }, []);
+
+  if (!apolloClient) {
+    return <div>Loading...</div>;
+  }
+
+  const { loading, error, data, refetch } = useQuery(GET_USER_DATA, {
+    variables: {
+      userId: userId || 0,
+      eventId: 20
+    },
+    context: {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    },
+    fetchPolicy: 'network-only',
+    pollInterval: 30000,
+    onError: (error) => {
+      console.error('GraphQL Error:', error);
+      if (error.message.includes('JWSInvalidSignature') || 
+          error.message.includes('Could not verify JWT') || 
+          error.message.includes('invalid token')) {
+        localStorage.removeItem('token');
+        router.push('/auth');
+      }
+    },
+    skip: !userId
+  });
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      router.push('/auth');
+      return;
+    }
+
+    // Check if token is expired
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      console.log('Token payload in useEffect:', payload);
+      
+      if (payload.exp * 1000 < Date.now()) {
+        console.log('Token expired');
+        localStorage.removeItem('token');
+        router.push('/auth');
+      }
+    } catch (error) {
+      console.error('Token validation error:', error);
+      localStorage.removeItem('token');
+      router.push('/auth');
+    }
+
+    // Initial data fetch
+    if (userId) {
+      console.log('Fetching data for user ID:', userId);
+      refetch();
+    }
+  }, [router, refetch, userId]);
+
+  if (loading) return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+    </div>
+  );
+
+  if (error) {
+    console.error('GraphQL Error:', error);
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-red-500">Error: {error.message}</div>
+      </div>
+    );
+  }
+
+  // Debug logging
+  console.log('GraphQL Response:', data);
+  console.log('User ID:', userId);
+
+  // Access the first user from the array
+  const user = data?.user?.[0];
+  if (!user) {
+    console.error('No user data found');
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-red-500">No user data found</div>
+      </div>
+    );
+  }
+
   const allTransactions = user.xp_transactions || [];
   const displayedTransactions = showAllActivity ? allTransactions : allTransactions.slice(0, 5);
   const audits = user.audits?.nodes || [];
@@ -430,7 +518,7 @@ function ProfileData({ client }) {
                 <div className="flex items-center space-x-3">
                   <div className="flex items-center text-indigo-100/80 text-sm">
                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
                     <span>{user.email}</span>
                   </div>
@@ -929,35 +1017,5 @@ function ProfileData({ client }) {
         </div>
       </div>
     </main>
-  );
-}
-
-export default function Profile() {
-  const [client] = useState(() => new ApolloClient({
-    uri: 'https://learn.reboot01.com/api/graphql-engine/v1/graphql',
-    cache: new InMemoryCache()
-  }));
-
-  useEffect(() => {
-    const token = typeof window !== 'undefined' ? window.localStorage.getItem('token') : null;
-    if (!token) {
-      window.location.href = '/auth';
-      return;
-    }
-
-    client.setLink(
-      createHttpLink({
-        uri: 'https://learn.reboot01.com/api/graphql-engine/v1/graphql',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-    );
-  }, [client]);
-
-  return (
-    <ApolloProvider client={client}>
-      <ProfileData client={client} />
-    </ApolloProvider>
   );
 }
