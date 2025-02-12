@@ -1,18 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { gql, useQuery, ApolloClient, InMemoryCache, ApolloProvider } from '@apollo/client';
+import { gql, useQuery, ApolloClient, InMemoryCache, ApolloProvider, createHttpLink } from '@apollo/client';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
-
-function createApolloClient(token) {
-  return new ApolloClient({
-    uri: 'https://learn.reboot01.com/api/graphql-engine/v1/graphql',
-    cache: new InMemoryCache(),
-    headers: {
-      'Authorization': `Bearer ${token}`
-    }
-  });
-}
 
 const GET_USER_DATA = gql`
   query($userId: Int!, $eventId: Int!) {
@@ -102,6 +92,19 @@ const GET_USER_DATA = gql`
     }
   }
 `;
+
+function getUserId() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const token = window.localStorage.getItem('token');
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.userId || payload.sub || null;
+  } catch (error) {
+    console.error('Error extracting user ID:', error);
+    return null;
+  }
+}
 
 const formatBytes = (bytes) => {
   if (bytes === 0) return '0';
@@ -350,32 +353,16 @@ const SkillsPieChart = ({ skills }) => {
   );
 };
 
-export default function Profile() {
+function ProfileData({ client }) {
   const router = useRouter();
-  const [client, setClient] = useState(null);
-  
-  useEffect(() => {
-    const token = typeof window !== 'undefined' ? window.localStorage.getItem('token') : '';
-    if (!token) {
-      router.push('/auth');
-      return;
-    }
-    
-    const newClient = createApolloClient(token);
-    setClient(newClient);
-  }, [router]);
-
-  if (!client) return <div>Loading...</div>;
-
-  return (
-    <ApolloProvider client={client}>
-      <ProfileContent />
-    </ApolloProvider>
-  );
-}
-
-function ProfileContent() {
   const userId = getUserId();
+
+  useEffect(() => {
+    if (!userId) {
+      router.push('/auth');
+    }
+  }, [userId, router]);
+
   const { loading, error, data } = useQuery(GET_USER_DATA, {
     variables: {
       userId: userId || 0,
@@ -394,20 +381,6 @@ function ProfileContent() {
   const [showAllAudits, setShowAllAudits] = useState(false);
   const [auditFilter, setAuditFilter] = useState('passed');
   
-  // Get userId from token
-  function getUserId() {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return null;
-      
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      return payload.userId || payload.sub || null;
-    } catch (error) {
-      console.error('Error extracting user ID:', error);
-      return null;
-    }
-  };
-
   const allTransactions = user.xp_transactions || [];
   const displayedTransactions = showAllActivity ? allTransactions : allTransactions.slice(0, 5);
   const audits = user.audits?.nodes || [];
@@ -956,5 +929,35 @@ function ProfileContent() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function Profile() {
+  const [client] = useState(() => new ApolloClient({
+    uri: 'https://learn.reboot01.com/api/graphql-engine/v1/graphql',
+    cache: new InMemoryCache()
+  }));
+
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? window.localStorage.getItem('token') : null;
+    if (!token) {
+      window.location.href = '/auth';
+      return;
+    }
+
+    client.setLink(
+      createHttpLink({
+        uri: 'https://learn.reboot01.com/api/graphql-engine/v1/graphql',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+    );
+  }, [client]);
+
+  return (
+    <ApolloProvider client={client}>
+      <ProfileData client={client} />
+    </ApolloProvider>
   );
 }

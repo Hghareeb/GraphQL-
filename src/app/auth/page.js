@@ -24,19 +24,12 @@ export default function Login() {
       });
 
       const data = await response.json();
-      console.log('Auth response:', data);
 
       if (response.ok && data.token) {
-        localStorage.setItem('token', data.token);
-        console.log('Stored token:', data.token);
+        // Store token
+        window.localStorage.setItem('token', data.token);
         
-        // Decode and log token payload
-        const payload = JSON.parse(atob(data.token.split('.')[1]));
-        console.log('Token payload:', payload);
-        
-        // Set token in cookie with HttpOnly flag
-        document.cookie = `auth_token=${data.token}; path=/; secure; samesite=strict`;
-        
+        // Navigate to profile
         router.push('/profile');
       } else {
         setError(data.message || 'Authentication failed');
