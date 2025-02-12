@@ -2,7 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  basePath: '',
   async headers() {
     return [
       {
@@ -23,6 +22,9 @@ const nextConfig = {
         permanent: false,
       },
     ];
+  },
+  compiler: {
+    removeConsole: false,
   },
   webpack: (config) => {
     config.resolve.fallback = { fs: false, net: false, tls: false };
