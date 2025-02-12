@@ -1,12 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
-  trailingSlash: false,
-  images: {
-    unoptimized: true
-  },
   reactStrictMode: true,
   swcMinify: true,
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: '/api/:path*',
+      },
+    ];
+  },
   async redirects() {
     return [
       {
@@ -14,7 +17,7 @@ const nextConfig = {
         destination: '/auth',
         permanent: true,
       },
-    ]
+    ];
   },
 }
 
