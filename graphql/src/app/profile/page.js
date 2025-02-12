@@ -4,18 +4,11 @@ import { useRouter } from 'next/navigation';
 import { gql, useQuery, ApolloClient, InMemoryCache } from '@apollo/client';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 
-const getToken = () => {
-  if (typeof window !== 'undefined') {
-    return localStorage.getItem('token') || '';
-  }
-  return '';
-};
-
 const client = new ApolloClient({
   uri: 'https://learn.reboot01.com/api/graphql-engine/v1/graphql',
   cache: new InMemoryCache(),
   headers: {
-    'Authorization': `Bearer ${getToken()}`
+    'Authorization': `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') : ''}`
   }
 });
 
@@ -357,59 +350,35 @@ const SkillsPieChart = ({ skills }) => {
 
 export default function Profile() {
   const router = useRouter();
-  const [token, setToken] = useState('');
-  const [userId, setUserId] = useState(null);
-  const [eventId, setEventId] = useState(null);
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [showAllProjects, setShowAllProjects] = useState(false);
   const [showAllAudits, setShowAllAudits] = useState(false);
   const [auditFilter, setAuditFilter] = useState('passed');
   
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const storedToken = localStorage.getItem('token');
-      setToken(storedToken || '');
+  // Get userId from token
+  const getUserId = () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return null;
       
-      if (!storedToken) {
-        router.push('/');
-        return;
-      }
-
-      // Decode token and extract user ID
-      try {
-        const base64Url = storedToken.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => 
-          '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-        ).join(''));
-        const decoded = JSON.parse(jsonPayload);
-        setUserId(decoded.user.id);
-        setEventId(decoded.user.eventId);
-      } catch (error) {
-        console.error('Error extracting user ID:', error);
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('token');
-        }
-        router.push('/');
-      }
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.userId || payload.sub || null;
+    } catch (error) {
+      console.error('Error extracting user ID:', error);
+      return null;
     }
-  }, [router]);
-
-  const handleLogout = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('token');
-    }
-    router.push('/');
   };
 
+  const userId = getUserId();
+  
   const { loading, error, data, refetch } = useQuery(GET_USER_DATA, {
     variables: {
       userId: userId || 0,
-      eventId: eventId || 0
+      eventId: 20
     },
     context: {
       headers: {
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
       }
     },
     fetchPolicy: 'network-only',
@@ -419,10 +388,8 @@ export default function Profile() {
       if (error.message.includes('JWSInvalidSignature') || 
           error.message.includes('Could not verify JWT') || 
           error.message.includes('invalid token')) {
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('token');
-        }
-        router.push('/');
+        localStorage.removeItem('token');
+        router.push('/auth');
       }
     },
     skip: !userId
@@ -431,7 +398,7 @@ export default function Profile() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
-      router.push('/');
+      router.push('/auth');
       return;
     }
 
@@ -442,17 +409,13 @@ export default function Profile() {
       
       if (payload.exp * 1000 < Date.now()) {
         console.log('Token expired');
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('token');
-        }
-        router.push('/');
+        localStorage.removeItem('token');
+        router.push('/auth');
       }
     } catch (error) {
       console.error('Token validation error:', error);
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('token');
-      }
-      router.push('/');
+      localStorage.removeItem('token');
+      router.push('/auth');
     }
 
     // Initial data fetch
@@ -566,7 +529,10 @@ export default function Profile() {
               </button>
               <button 
                 className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-100 text-sm rounded-lg transition-colors duration-200 flex items-center"
-                onClick={handleLogout}
+                onClick={() => {
+                  localStorage.removeItem('token');
+                  router.push('/auth');
+                }}
               >
                 <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
