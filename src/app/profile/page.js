@@ -4,13 +4,17 @@ import { useRouter } from 'next/navigation';
 import { gql, useQuery, ApolloClient, InMemoryCache } from '@apollo/client';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 
-const client = new ApolloClient({
-  uri: 'https://learn.reboot01.com/api/graphql-engine/v1/graphql',
-  cache: new InMemoryCache(),
-  headers: {
-    'Authorization': `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') : ''}`
-  }
-});
+function createApolloClient() {
+  return new ApolloClient({
+    uri: 'https://learn.reboot01.com/api/graphql-engine/v1/graphql',
+    cache: new InMemoryCache(),
+    headers: {
+      'Authorization': `Bearer ${typeof window !== 'undefined' ? window.localStorage.getItem('token') || '' : ''}`
+    }
+  });
+}
+
+const client = createApolloClient();
 
 const GET_USER_DATA = gql`
   query($userId: Int!, $eventId: Int!) {
@@ -371,6 +375,16 @@ export default function Profile() {
 
   const userId = getUserId();
   
+  const [apolloClient, setApolloClient] = useState(null);
+
+  useEffect(() => {
+    setApolloClient(createApolloClient());
+  }, []);
+
+  if (!apolloClient) {
+    return <div>Loading...</div>;
+  }
+
   const { loading, error, data, refetch } = useQuery(GET_USER_DATA, {
     variables: {
       userId: userId || 0,
