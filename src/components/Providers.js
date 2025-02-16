@@ -2,23 +2,22 @@
 
 import { ApolloClient, ApolloProvider, InMemoryCache, createHttpLink } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
+import { onError } from '@apollo/client/link/error';
+import { useRouter } from 'next/navigation';
 
 export default function Providers({ children }) {
+  const router = useRouter();
+
   const httpLink = createHttpLink({
-    uri: 'https://learn.reboot01.com/api/graphql-engine/v1/graphql',
+    uri: process.env.GRAPHQL_ENDPOINT,
     credentials: 'include',
   });
 
   const authLink = setContext((_, { headers }) => {
-    // Get token from cookie
-    const getCookie = (name) => {
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) return parts.pop().split(';').shift();
-      return null;
-    };
-
-    const token = getCookie('auth_token') || localStorage.getItem('token');
+    let token = null;
+    if (typeof window !== 'undefined') {
+      token = localStorage.getItem('token');
+    }
 
     return {
       headers: {
@@ -29,10 +28,28 @@ export default function Providers({ children }) {
     };
   });
 
+  const errorLink = onError(({ graphQLErrors, networkError }) => {
+    if (graphQLErrors) {
+      graphQLErrors.forEach(({ message }) => {
+        console.error('GraphQL Error:', message);
+        if (message.includes('JWSInvalidSignature') || 
+            message.includes('Could not verify JWT') || 
+            message.includes('invalid token')) {
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('token');
+            router.push('/auth');
+          }
+        }
+      });
+    }
+    if (networkError) {
+      console.error('Network Error:', networkError);
+    }
+  });
+
   const client = new ApolloClient({
-    link: authLink.concat(httpLink),
+    link: errorLink.concat(authLink.concat(httpLink)),
     cache: new InMemoryCache(),
-    credentials: 'include',
     defaultOptions: {
       watchQuery: {
         fetchPolicy: 'network-only',

@@ -362,7 +362,7 @@ export default function Profile() {
   // Get userId from token
   const getUserId = () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = typeof window !== 'undefined' ? window.localStorage.getItem('token') : null;
       if (!token) return null;
       
       const payload = JSON.parse(atob(token.split('.')[1]));
@@ -392,7 +392,7 @@ export default function Profile() {
     },
     context: {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Authorization': `Bearer ${typeof window !== 'undefined' ? window.localStorage.getItem('token') : ''}`
       }
     },
     fetchPolicy: 'network-only',
@@ -402,7 +402,9 @@ export default function Profile() {
       if (error.message.includes('JWSInvalidSignature') || 
           error.message.includes('Could not verify JWT') || 
           error.message.includes('invalid token')) {
-        localStorage.removeItem('token');
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem('token');
+        }
         router.push('/auth');
       }
     },
@@ -410,7 +412,7 @@ export default function Profile() {
   });
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = typeof window !== 'undefined' ? window.localStorage.getItem('token') : null;
     if (!token) {
       router.push('/auth');
       return;
@@ -423,12 +425,16 @@ export default function Profile() {
       
       if (payload.exp * 1000 < Date.now()) {
         console.log('Token expired');
-        localStorage.removeItem('token');
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem('token');
+        }
         router.push('/auth');
       }
     } catch (error) {
       console.error('Token validation error:', error);
-      localStorage.removeItem('token');
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem('token');
+      }
       router.push('/auth');
     }
 
@@ -518,7 +524,7 @@ export default function Profile() {
                 <div className="flex items-center space-x-3">
                   <div className="flex items-center text-indigo-100/80 text-sm">
                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2z" />
                     </svg>
                     <span>{user.email}</span>
                   </div>
@@ -544,7 +550,9 @@ export default function Profile() {
               <button 
                 className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-100 text-sm rounded-lg transition-colors duration-200 flex items-center"
                 onClick={() => {
-                  localStorage.removeItem('token');
+                  if (typeof window !== 'undefined') {
+                    window.localStorage.removeItem('token');
+                  }
                   router.push('/auth');
                 }}
               >
